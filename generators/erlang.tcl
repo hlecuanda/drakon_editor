@@ -6,7 +6,7 @@ namespace eval gen_erl {
 variable tdb ""
 
 
-proc change_state { text state } {
+proc change_state { text state returns } {
 
 	if { $state == "" } {
 		set state "final_state"
@@ -83,6 +83,7 @@ proc make_callbacks { } {
 	gen::put_callback callbacks shelf			gen_erl::shelf
 	
 	gen::put_callback callbacks change_state	gen_erl::change_state
+	gen::put_callback callbacks shutdown ""
 	gen::put_callback callbacks fsm_merge   1
 	
 	gen::put_callback callbacks select				gen_erl::select

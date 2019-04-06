@@ -132,6 +132,7 @@ proc make_callbacks { } {
 	gen::put_callback callbacks shelf		gen_js::shelf
 	
     gen::put_callback callbacks change_state 	gen_js::change_state
+    gen::put_callback callbacks shutdown 	""
     gen::put_callback callbacks fsm_merge   0
     
 	return $callbacks
@@ -165,15 +166,24 @@ proc extract_signature { text name } {
 	return [ list {} [ gen::create_signature procedure public $parameters "" ] ]
 }
 
-proc change_state { next_state machine_name } {
+
+proc change_state { next_state machine_name returns } {
     #item 1832
+    
     if {$next_state == ""} {
         #item 1836
-        return "self.state = null;"
+        set change "self.state = null;"
     } else {
         #item 1835
-        return "self.state = \"${next_state}\""
+        set change "self.state = \"${next_state}\";"
     }
+    
+    if {$returns == {}} {
+		return $change
+	} else {
+		set output [lindex $returns 1]
+		return "$change\n$output"
+	}
 }
 
 proc p.declare { type name value } {
@@ -290,7 +300,7 @@ proc make_machine_ctrs { gdb machines } {
 
         set ctr [make_machine_ctr $gdb $name $states $param_names $messages]
 
-        append result $ctr    
+        append result "\n$ctr\n"
     }
     return $result
 }
@@ -331,28 +341,30 @@ proc make_machine_ctr { gdb name states param_names messages } {
     lappend lines "function ${name}\(\) \{"
 
     lappend lines \
-     "  this.type_name = \"$name\";"
+     "  var _self = this;"
+    lappend lines \
+     "  _self.type_name = \"$name\";"
 
     set first [ lindex $states 0 ]
-    lappend lines "  this.state = \"${first}\";"
+    lappend lines "  _self.state = \"${first}\";"
     
     foreach message $messages {
         lappend lines \
-         "  this.$message = function\($params_str\) \{"
+         "  _self.$message = function\($params_str\) \{"
         
         lappend lines \
-         "    var _state_ = this.state"
+         "    var _state_ = _self.state;"
         set first 1
         foreach state $states {
 
 			set call ""
 			set method [gen::make_normal_state_method $name $state $message ]
 			if {[gen::diagram_exists $gdb $method ]} {
-				set call "      ${method}(this, $params_str\)"
+				set call "      return ${method}(_self, $params_str\);"
 			} else {
 				set method [gen::make_default_state_method $name $state]
 				if {[gen::diagram_exists $gdb $method ]} {
-					set call "      ${method}(this, $params_str\)"
+					set call "      return ${method}(_self, $params_str\);"
 				}				
 			}
 
@@ -373,9 +385,10 @@ proc make_machine_ctr { gdb name states param_names messages } {
 				 set first 0
 			}
 		}
-        
         lappend lines \
-         "  \}"
+         "    return null;"
+        lappend lines \
+         "  \};"
     }
     
     lappend lines \
